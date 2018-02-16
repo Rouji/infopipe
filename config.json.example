@@ -1,0 +1,36 @@
+{
+    "nodes":
+    [
+        {
+            "type": "rssreader",
+            "name": "rssin",
+            "feeds": [
+                "https://www.youtube.com/feeds/videos.xml?channel_id=UChWv6Pn_zP0rI6lgGt3MyfA",
+                "http://yaraon-blog.com/feed"
+            ]
+        },
+        {
+            "type": "regex",
+            "name": "re",
+            "regex": ".*(BOLTR|悲報).*",
+            "depend": ["rssin"]
+        },
+        {
+            "type": "txtgenerator",
+            "name": "txtout",
+            "path": "/tmp/text.txt",
+            "depend": ["re"]
+        },
+        {
+            "type": "rssgenerator",
+            "name": "rssout",
+
+            "path": "/tmp/rss.xml",
+            "title": "herp",
+            "description": "hallo",
+            "link": "https://r0.at/",
+            "depend": ["re"]
+        }
+    ]
+}
+
