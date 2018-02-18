@@ -2,6 +2,7 @@ from infopipe import Node, InfoPipe, ConfigError
 import feedparser
 import dateutil.parser
 from datetime import datetime
+from concurrent import futures
 
 
 @InfoPipe.register('rssreader')
@@ -33,11 +34,12 @@ class RSSReader(Node):
         }
 
     def process(self, input_data):
-        def parse_feeds(feeds):
-            for feed in feeds:
-                parsed = feedparser.parse(feed)
-                if 'entries' not in parsed:
-                    continue
-                for entry in parsed['entries']:
-                    yield self.entry_to_output(entry)
-        return list(parse_feeds(self.config['feeds']))
+        def parse_feed(feed):
+            parsed = feedparser.parse(feed)
+            if 'entries' not in parsed:
+                return []
+            return [self.entry_to_output(e) for e in parsed['entries']]
+        with futures.ThreadPoolExecutor(max_workers=4) as executor:
+            futs = [executor.submit(parse_feed, f) for f in self.config['feeds']]
+            feeds = [fut.result() for fut in futures.as_completed(futs)]
+            return [entry for feed in feeds for entry in feed]
