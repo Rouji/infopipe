@@ -12,3 +12,4 @@ def main(config='config.json'):
         pipe = InfoPipe(json.load(c))
 
     pipe.update()
+    print(json.loads(pipe.get_output('re', limit=1)))

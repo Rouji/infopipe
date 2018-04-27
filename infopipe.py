@@ -43,6 +43,16 @@ class InfoPipe:
         'nodes': SchemaVal(True, default=[])
     })
 
+    output_schema = Schema()
+    output_schema.add_vals({
+        'source': SchemaVal(True, vartype=str),
+        'id': SchemaVal(True, vartype=str),
+        'title': SchemaVal(True, vartype=str),
+        'date': SchemaVal(True, vartype=datetime),
+        'content': SchemaVal(False, vartype=str, default=''),
+        'link': SchemaVal(False, vartype=str)
+    })
+
     def __init__(self, config):
         self.config = config
         InfoPipe.config_schema.validate(config)
@@ -82,7 +92,7 @@ class InfoPipe:
             if n['type'] not in InfoPipe.node_types:
                 raise RuntimeError('Unknown node type "{}"'.format(n['type']))
             new = InfoPipe.node_types[n['type']](n)
-            new.config_schema.validate()
+            new.config_schema.validate(new.config)
             self.nodes[n['name']] = new
 
     def update(self):
@@ -111,6 +121,8 @@ class InfoPipe:
             new = [n for n in out if n['id'] not in ids]
             outputs[name] = new
             print(f'node: {name}, new: {len(new)}')
+            for n in new:
+                InfoPipe.output_schema.validate(n)
             if len(new) > 0:
                 self.db.executemany('INSERT INTO node_output(node, uid, output) VALUES(?, ?, ?);',
                                     [(name, n['id'], json.dumps(n, cls=DateTimeEncoder)) for n in new])
@@ -118,3 +130,13 @@ class InfoPipe:
 
         for n in self.nodes.values():
             process_node(n)
+
+    def node_names(self):
+        return self.nodes.keys()
+
+    def get_output(self, node: str, limit: int = 100):
+        res = self.db.execute('SELECT output FROM node_output WHERE node = ? ORDER BY time DESC LIMIT ?;', (node, limit))
+        rows = res.fetchall()
+        if not rows:
+            return None
+        return '[' + ','.join([r[0] for r in rows]) + ']'

@@ -3,9 +3,9 @@ class SchemaError(Exception):
 
 
 class SchemaVal:
-    def __init__(self, required: bool, default=None, comment: str = None):
-        # TODO: type requirement
+    def __init__(self, required: bool, vartype: type = None, default=None, comment: str = None):
         self.required = required
+        self.vartype = vartype
         self.default = default
         self.comment = comment
 
@@ -31,11 +31,14 @@ class Schema:
         try:
             for s in spl:
                 v = v[s]
-            return v
         except:
             if val.required:
                 raise SchemaError(f'required schema value "{name}" not set')
             return self.vals[name].default
+        if val.vartype is not None and type(v) != val.vartype:
+            raise SchemaError(f'schema value "{name}" is of type "{type(v).__name__}", '
+                              f'expected "{val.vartype.__name__}"')
+        return v
 
     def validate(self, src):
         for name in self.vals.keys():

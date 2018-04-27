@@ -1,3 +1,4 @@
+from schema import SchemaVal
 from infopipe import Node, InfoPipe, ConfigError
 import feedparser
 import dateutil.parser
@@ -9,6 +10,9 @@ from concurrent import futures
 class RSSReader(Node):
     def __init__(self, config):
         super().__init__(config)
+        self.config_schema.add_vals({
+            'feeds': SchemaVal(True, default=[])
+        })
         if 'feeds' not in config:
             raise ConfigError('rssreader config requires "feeds" array')
 
@@ -25,7 +29,7 @@ class RSSReader(Node):
             date = datetime.now()
 
         return {
-            'source': self.config['name'],
+            'source': self.conf('name'),
             'id': entry['id'],
             'link': entry['link'],
             'title': entry['title'],
@@ -40,6 +44,6 @@ class RSSReader(Node):
                 return []
             return [self.entry_to_output(e) for e in parsed['entries']]
         with futures.ThreadPoolExecutor(max_workers=4) as executor:
-            futs = [executor.submit(parse_feed, f) for f in self.config['feeds']]
+            futs = [executor.submit(parse_feed, f) for f in self.conf('feeds')]
             feeds = [fut.result() for fut in futures.as_completed(futs)]
             return [entry for feed in feeds for entry in feed]
