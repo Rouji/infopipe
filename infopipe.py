@@ -1,6 +1,17 @@
 # coding=utf-8
 import importlib.util
 import os
+from schema import Schema, SchemaVal
+import sqlite3
+import json
+from datetime import datetime
+
+
+class DateTimeEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, datetime):
+            return obj.strftime('%Y-%m-%dT%H:%M:%S')
+        return json.JSONEncoder.default(obj)
 
 
 class ConfigError(Exception):
@@ -9,7 +20,16 @@ class ConfigError(Exception):
 
 class Node:
     def __init__(self, config):
+        self.config_schema = Schema()
+        self.config_schema.add_vals({
+            'type': SchemaVal(True),
+            'name': SchemaVal(True),
+            'depend': SchemaVal(False, default=[])
+        })
         self.config = config
+
+    def conf(self, name: str):
+        return self.config_schema.get(self.config, name)
 
     def process(self, input_data):
         raise NotImplementedError()
@@ -17,9 +37,25 @@ class Node:
 
 class InfoPipe:
     node_types = {}
+    config_schema = Schema()
+    config_schema.add_vals({
+        'db': SchemaVal(True, default='data.db'),
+        'nodes': SchemaVal(True, default=[])
+    })
 
     def __init__(self, config):
         self.config = config
+        InfoPipe.config_schema.validate(config)
+
+        self.db = sqlite3.connect(self.config['db'])
+        self.db.execute("""
+            CREATE TABLE IF NOT EXISTS node_output(
+                time TIMESTAMP DEFAULT current_timestamp,
+                node TEXT,
+                uid TEXT,
+                output TEXT,
+                UNIQUE(node, uid) ON CONFLICT REPLACE);""")
+        self.db.commit()
 
         self.nodes = {}
 
@@ -45,21 +81,40 @@ class InfoPipe:
         for n in self.config['nodes']:
             if n['type'] not in InfoPipe.node_types:
                 raise RuntimeError('Unknown node type "{}"'.format(n['type']))
-            self.nodes[n['name']] = InfoPipe.node_types[n['type']](n)
+            new = InfoPipe.node_types[n['type']](n)
+            new.config_schema.validate()
+            self.nodes[n['name']] = new
 
-    def run(self):
+    def update(self):
         outputs = {}
 
         def process_node(node):
-            if node.config['name'] in outputs.keys():
-                return outputs[node.config['name']]
-            if node.config['name'] not in self.nodes:
-                print('Unknown node "{}"'.format(node.config['name']))
+            name = node.conf('name')
+            if name in outputs.keys():
+                return outputs[name]
+            if name not in self.nodes:
+                print(f'Unknown node "{name}"')
                 return []
-            out = self.nodes[node.config['name']].process(
-                sum([process_node(self.nodes[d]) for d in node.config['depend']], []) if 'depend' in node.config else []
+
+            depend_out = [process_node(self.nodes[dep]) for dep in node.conf('depend')]
+            out = self.nodes[name].process(
+                sum([dep for dep in depend_out if dep], [])
             )
-            outputs[node.config['name']] = out
+            if not out or len(out) < 1:
+                return
+
+            res = self.db.execute('SELECT uid FROM node_output WHERE node = ?;', (node.config['name'],))
+            rows = res.fetchall()
+            ids = {}
+            if rows:
+                ids = {r[0] for r in rows}
+            new = [n for n in out if n['id'] not in ids]
+            outputs[name] = new
+            print(f'node: {name}, new: {len(new)}')
+            if len(new) > 0:
+                self.db.executemany('INSERT INTO node_output(node, uid, output) VALUES(?, ?, ?);',
+                                    [(name, n['id'], json.dumps(n, cls=DateTimeEncoder)) for n in new])
+                self.db.commit()
 
         for n in self.nodes.values():
             process_node(n)

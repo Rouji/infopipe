@@ -1,3 +1,4 @@
+from schema import SchemaVal
 from infopipe import Node, InfoPipe, ConfigError
 from datetime import datetime
 import html
@@ -30,6 +31,7 @@ class RSSGenerator(Node):
 
     def __init__(self, config):
         super().__init__(config)
+        self.config_schema.add_vals({'path': SchemaVal(True)})
         if 'path' not in config:
             raise ConfigError('rssgenerator config requires "path" value')
 

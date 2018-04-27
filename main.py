@@ -11,4 +11,4 @@ def main(config='config.json'):
     with open(config) as c:
         pipe = InfoPipe(json.load(c))
 
-    pipe.run()
+    pipe.update()

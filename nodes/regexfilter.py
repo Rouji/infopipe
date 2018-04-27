@@ -1,4 +1,5 @@
 from infopipe import Node, InfoPipe
+from schema import SchemaVal
 import re
 
 
@@ -6,7 +7,8 @@ import re
 class RegexFilter(Node):
     def __init__(self, config):
         super().__init__(config)
-        self.re = re.compile(config['regex'])
+        self.config_schema.add_vals({'regex': SchemaVal(True)})
+        self.re = re.compile(self.conf('regex'))
 
     def process(self, input_data):
         return [
