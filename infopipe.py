@@ -50,7 +50,9 @@ class InfoPipe:
         'title': SchemaVal(True, vartype=str),
         'date': SchemaVal(True, vartype=datetime),
         'content': SchemaVal(False, vartype=str, default=''),
-        'link': SchemaVal(False, vartype=str)
+        'link': SchemaVal(False, vartype=str),
+        'author': SchemaVal(False, vartype=str),
+        'tags': SchemaVal(False, vartype=list, default=[])
     })
 
     def __init__(self, config):
