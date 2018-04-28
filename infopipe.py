@@ -1,10 +1,12 @@
 # coding=utf-8
 import importlib.util
-import os
-from schema import Schema, SchemaVal
-import sqlite3
 import json
+import os
+import sqlite3
+import threading
 from datetime import datetime
+
+from schema import Schema, SchemaVal
 
 
 class DateTimeEncoder(json.JSONEncoder):
@@ -16,6 +18,24 @@ class DateTimeEncoder(json.JSONEncoder):
 
 class ConfigError(Exception):
     pass
+
+
+class ThreadedSqlite:
+    def __init__(self, *args, **kwargs):
+        self.__dict__['__args'] = args
+        self.__dict__['__kwargs'] = kwargs
+        self.__dict__['__lastid'] = None
+        self.__dict__['__conn'] = None
+
+    def __connect(self):
+        self.__dict__['__lastid'] = threading.current_thread().ident
+        self.__dict__['__conn'] = sqlite3.connect(*self.__dict__['__args'], **self.__dict__['__kwargs'])
+
+    def __getattr__(self, item):
+        currid = threading.current_thread().ident
+        if currid != self.__dict__['__lastid']:
+            self.__connect()
+        return self.__dict__['__conn'].__getattribute__(item)
 
 
 class Node:
@@ -59,7 +79,7 @@ class InfoPipe:
         self.config = config
         InfoPipe.config_schema.validate(config)
 
-        self.db = sqlite3.connect(self.config['db'])
+        self.db = ThreadedSqlite(self.config['db'])
         self.db.execute("""
             CREATE TABLE IF NOT EXISTS node_output(
                 time TIMESTAMP DEFAULT current_timestamp,
@@ -137,7 +157,8 @@ class InfoPipe:
         return self.nodes.keys()
 
     def get_output(self, node: str, limit: int = 100):
-        res = self.db.execute('SELECT output FROM node_output WHERE node = ? ORDER BY time DESC LIMIT ?;', (node, limit))
+        res = self.db.execute('SELECT output FROM node_output WHERE node = ? ORDER BY time DESC LIMIT ?;',
+                              (node, limit))
         rows = res.fetchall()
         if not rows:
             return None
