@@ -21,7 +21,7 @@ def root():
 
 @app.route('/<name>', methods=['GET'])
 def node(name: str):
-    return ip.get_output(name) or ''
+    return ip.get_output(name) or '', 404
 
 
 @entrypoint
