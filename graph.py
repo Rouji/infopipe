@@ -16,10 +16,6 @@ class DateTimeEncoder(json.JSONEncoder):
         return json.JSONEncoder.default(obj)
 
 
-class ConfigError(Exception):
-    pass
-
-
 class Node:
     def __init__(self, config):
         self.config_schema = {
