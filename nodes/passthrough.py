@@ -1,7 +1,7 @@
-from infopipe import Node, InfoPipe
+from graph import Node, Graph
 
 
-@InfoPipe.register('passthrough')
+@Graph.register('passthrough')
 class Passthrough(Node):
     def __init__(self, config):
         super().__init__(config)

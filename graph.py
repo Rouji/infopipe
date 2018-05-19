@@ -4,9 +4,9 @@ import json
 import os
 import sqlite3
 import threading
+import sys
+from jsonschema import validate
 from datetime import datetime
-
-from schema import Schema, SchemaVal
 
 
 class DateTimeEncoder(json.JSONEncoder):
@@ -20,66 +20,57 @@ class ConfigError(Exception):
     pass
 
 
-class ThreadedSqlite:
-    def __init__(self, *args, **kwargs):
-        self.__dict__['__args'] = args
-        self.__dict__['__kwargs'] = kwargs
-        self.__dict__['__lastid'] = None
-        self.__dict__['__conn'] = None
-
-    def __connect(self):
-        self.__dict__['__lastid'] = threading.current_thread().ident
-        self.__dict__['__conn'] = sqlite3.connect(*self.__dict__['__args'], **self.__dict__['__kwargs'])
-
-    def __getattr__(self, item):
-        currid = threading.current_thread().ident
-        if currid != self.__dict__['__lastid']:
-            self.__connect()
-        return self.__dict__['__conn'].__getattribute__(item)
-
-
 class Node:
     def __init__(self, config):
-        self.config_schema = Schema()
-        self.config_schema.add_vals({
-            'type': SchemaVal(True),
-            'name': SchemaVal(True),
-            'depend': SchemaVal(False, default=[])
-        })
-        self.config = config
+        self.config_schema = {
+            'type': 'object',
+            'properties': {
+                'type': { 'type': 'string' },
+                'name': { 'type': 'string' },
+                'depend': { 'type': 'array', 'items': { 'type': 'string'}, 'default': [] }
+            },
+            'required': ['type', 'name']
+        }
 
-    def conf(self, name: str):
-        return self.config_schema.get(self.config, name)
+        self.config = config
 
     def process(self, input_data):
         raise NotImplementedError()
 
 
-class InfoPipe:
+class Graph(object):
     node_types = {}
-    config_schema = Schema()
-    config_schema.add_vals({
-        'db': SchemaVal(True, default='data.db'),
-        'nodes': SchemaVal(True, default=[])
-    })
+    config_schema = {
+        'type': 'object',
+        'properties': {
+            'nodes': {'type': 'array', 'items': {'type': 'object'}},
+        },
+        'required': ['nodes']
+    }
 
-    output_schema = Schema()
-    output_schema.add_vals({
-        'source': SchemaVal(True, vartype=str),
-        'id': SchemaVal(True, vartype=str),
-        'title': SchemaVal(True, vartype=str),
-        'date': SchemaVal(True, vartype=datetime),
-        'content': SchemaVal(False, vartype=str, default=''),
-        'link': SchemaVal(False, vartype=str),
-        'author': SchemaVal(False, vartype=str),
-        'tags': SchemaVal(False, vartype=list, default=[])
-    })
+    output_schema = {
+        'type': 'object',
+        'properties':
+        {
+            'source': {'type': 'string'},
+            'id': {'type': 'string'},
+            'title': {'type': 'string'},
+            'timestamp': {'type': 'number'},
+            'content': {'type': 'string', 'default': ''},
+            'link': {'type': 'string'},
+            'author': {'type': 'string'},
+            'tags': {'type': 'array', 'items': {'type': 'string'}}
+        },
+        'required': ['source', 'id', 'title', 'timestamp']
+    }
 
-    def __init__(self, config):
+    def __init__(self, config, sqlitedb):
         self.config = config
-        InfoPipe.config_schema.validate(config)
+        validate(config, Graph.config_schema)
 
-        self.db = ThreadedSqlite(self.config['db'])
+        self.db = sqlitedb
+
+        # create table
         self.db.execute("""
             CREATE TABLE IF NOT EXISTS node_output(
                 time TIMESTAMP DEFAULT current_timestamp,
@@ -92,7 +83,7 @@ class InfoPipe:
         self.nodes = {}
 
         self.load_types('nodes')
-        self.instantiate_nodes()
+        self.instantiate_nodes(self.config['nodes'])
 
     @classmethod
     def register(cls, name):
@@ -105,30 +96,30 @@ class InfoPipe:
     def load_types(self, path):
         for f in [f for f in os.listdir(path) if f.endswith('.py')]:
             name = f.rsplit('.py', 1)[0]
-            spec = importlib.util.spec_from_file_location('infopipe.' + name, os.path.join(path, f))
+            spec = importlib.util.spec_from_file_location('graph.nodes.' + name, os.path.join(path, f))
             mod = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(mod)
 
-    def instantiate_nodes(self):
-        for n in self.config['nodes']:
-            if n['type'] not in InfoPipe.node_types:
+    def instantiate_nodes(self, nodes):
+        for n in nodes:
+            if n['type'] not in Graph.node_types:
                 raise RuntimeError('Unknown node type "{}"'.format(n['type']))
-            new = InfoPipe.node_types[n['type']](n)
-            new.config_schema.validate(new.config)
+            new = Graph.node_types[n['type']](n)
+            validate(new.config, new.config_schema)
             self.nodes[n['name']] = new
 
     def update(self):
         outputs = {}
 
         def process_node(node):
-            name = node.conf('name')
+            name = node.config['name']
             if name in outputs.keys():
                 return outputs[name]
             if name not in self.nodes:
-                print(f'Unknown node "{name}"')
+                print(f'Unknown node "{name}"', file=sys.stderr)
                 return []
 
-            depend_out = [process_node(self.nodes[dep]) for dep in node.conf('depend')]
+            depend_out = [process_node(self.nodes[dep]) for dep in node.config.get('depend',[])]
             out = self.nodes[name].process(
                 sum([dep for dep in depend_out if dep], [])
             )
@@ -142,9 +133,9 @@ class InfoPipe:
                 ids = {r[0] for r in rows}
             new = [n for n in out if n['id'] not in ids]
             outputs[name] = new
-            print(f'node: {name}, new: {len(new)}')
+            # print(f'node: {name}, new: {len(new)}')
             for n in new:
-                InfoPipe.output_schema.validate(n)
+                validate(n, Graph.output_schema)
             if len(new) > 0:
                 self.db.executemany('INSERT INTO node_output(node, uid, output) VALUES(?, ?, ?);',
                                     [(name, n['id'], json.dumps(n, cls=DateTimeEncoder)) for n in new])
@@ -154,7 +145,7 @@ class InfoPipe:
             process_node(n)
 
     def node_names(self):
-        return self.nodes.keys()
+        return list(self.nodes.keys())
 
     def get_output(self, node: str, limit: int = 100):
         res = self.db.execute('SELECT output FROM node_output WHERE node = ? ORDER BY time DESC LIMIT ?;',

@@ -1,20 +1,18 @@
-from schema import SchemaVal
-from infopipe import Node, InfoPipe, ConfigError
+from graph import Node, Graph, ConfigError
 import feedparser
 import dateutil.parser
-from datetime import datetime
+import calendar
 from concurrent import futures
 
 
-@InfoPipe.register('rssreader')
+@Graph.register('rssreader')
 class RSSReader(Node):
     def __init__(self, config):
         super().__init__(config)
-        self.config_schema.add_vals({
-            'feeds': SchemaVal(True, default=[])
-        })
-        if 'feeds' not in config:
-            raise ConfigError('rssreader config requires "feeds" array')
+        self.config_schema['properties']['feeds'] = {
+            'type': 'array', 'items': {'type': 'string'}
+        }
+        self.config_schema['required'].append('feeds')
 
     def entry_to_output(self, entry):
         content = None
@@ -29,12 +27,12 @@ class RSSReader(Node):
             date = datetime.now()
 
         return {
-            'source': self.conf('name'),
+            'source': self.config['name'],
             'id': entry['id'],
             'link': entry['link'],
             'title': entry['title'],
-            'date': dateutil.parser.parse(entry['published']),
-            'content': content
+            'timestamp': calendar.timegm(date.timetuple()),
+            'content': content or ''
         }
 
     def process(self, input_data):
@@ -44,6 +42,6 @@ class RSSReader(Node):
                 return []
             return [self.entry_to_output(e) for e in parsed['entries']]
         with futures.ThreadPoolExecutor(max_workers=4) as executor:
-            futs = [executor.submit(parse_feed, f) for f in self.conf('feeds')]
+            futs = [executor.submit(parse_feed, f) for f in self.config['feeds']]
             feeds = [fut.result() for fut in futures.as_completed(futs)]
             return [entry for feed in feeds for entry in feed]

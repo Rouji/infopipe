@@ -1,14 +1,15 @@
-from infopipe import Node, InfoPipe
-from schema import SchemaVal
+from graph import Node, Graph
 import re
 
 
-@InfoPipe.register('regex')
+@Graph.register('regex')
 class RegexFilter(Node):
     def __init__(self, config):
         super().__init__(config)
-        self.config_schema.add_vals({'regex': SchemaVal(True)})
-        self.re = re.compile(self.conf('regex'))
+        self.config_schema['properties']['regex'] = {'type': 'string'}
+        self.config_schema['required'].append('regex')
+
+        self.re = re.compile(self.config['regex'])
 
     def process(self, input_data):
         return [
