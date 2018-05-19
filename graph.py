@@ -1,19 +1,9 @@
 # coding=utf-8
-import importlib.util
+from importlib.util import spec_from_file_location, module_from_spec
 import json
 import os
-import sqlite3
-import threading
 import sys
 from jsonschema import validate
-from datetime import datetime
-
-
-class DateTimeEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, datetime):
-            return obj.strftime('%Y-%m-%dT%H:%M:%S')
-        return json.JSONEncoder.default(obj)
 
 
 class Node:
@@ -21,9 +11,13 @@ class Node:
         self.config_schema = {
             'type': 'object',
             'properties': {
-                'type': { 'type': 'string' },
-                'name': { 'type': 'string' },
-                'depend': { 'type': 'array', 'items': { 'type': 'string'}, 'default': [] }
+                'type': {'type': 'string'},
+                'name': {'type': 'string'},
+                'depend': {
+                    'type': 'array',
+                    'items': {'type': 'string'},
+                    'default': []
+                }
             },
             'required': ['type', 'name']
         }
@@ -67,8 +61,8 @@ class Graph(object):
         self.db = sqlitedb
 
         # create table
-        self.db.execute("""
-            CREATE TABLE IF NOT EXISTS node_output(
+        self.db.execute(
+            """CREATE TABLE IF NOT EXISTS node_output(
                 time TIMESTAMP DEFAULT current_timestamp,
                 node TEXT,
                 uid TEXT,
@@ -92,8 +86,9 @@ class Graph(object):
     def load_types(self, path):
         for f in [f for f in os.listdir(path) if f.endswith('.py')]:
             name = f.rsplit('.py', 1)[0]
-            spec = importlib.util.spec_from_file_location('graph.nodes.' + name, os.path.join(path, f))
-            mod = importlib.util.module_from_spec(spec)
+            spec = spec_from_file_location('graph.nodes.' + name,
+                                           os.path.join(path, f))
+            mod = module_from_spec(spec)
             spec.loader.exec_module(mod)
 
     def instantiate_nodes(self, nodes):
@@ -115,14 +110,23 @@ class Graph(object):
                 print(f'Unknown node "{name}"', file=sys.stderr)
                 return []
 
-            depend_out = [process_node(self.nodes[dep]) for dep in node.config.get('depend',[])]
+            depend_out = [
+                process_node(self.nodes[dep])
+                for dep
+                in node.config.get('depend', [])
+            ]
             out = self.nodes[name].process(
                 sum([dep for dep in depend_out if dep], [])
             )
             if not out or len(out) < 1:
                 return
 
-            res = self.db.execute('SELECT uid FROM node_output WHERE node = ?;', (node.config['name'],))
+            res = self.db.execute(
+                """SELECT uid
+                FROM node_output
+                WHERE node = ?;""",
+                (node.config['name'],)
+            )
             rows = res.fetchall()
             ids = {}
             if rows:
@@ -133,8 +137,10 @@ class Graph(object):
             for n in new:
                 validate(n, Graph.output_schema)
             if len(new) > 0:
-                self.db.executemany('INSERT INTO node_output(node, uid, output) VALUES(?, ?, ?);',
-                                    [(name, n['id'], json.dumps(n, cls=DateTimeEncoder)) for n in new])
+                self.db.executemany(
+                    """INSERT INTO node_output(node, uid, output)
+                    VALUES(?, ?, ?);""",
+                    [(name, n['id'], json.dumps(n)) for n in new])
                 self.db.commit()
 
         for n in self.nodes.values():
@@ -144,8 +150,14 @@ class Graph(object):
         return list(self.nodes.keys())
 
     def get_output(self, node: str, limit: int = 100):
-        res = self.db.execute('SELECT output FROM node_output WHERE node = ? ORDER BY time DESC LIMIT ?;',
-                              (node, limit))
+        res = self.db.execute(
+            """SELECT output
+            FROM node_output
+            WHERE node = ?
+            ORDER BY time DESC
+            LIMIT ?;""",
+            (node, limit)
+        )
         rows = res.fetchall()
         if not rows:
             return None
