@@ -94,7 +94,8 @@ class Graph(object):
     def instantiate_nodes(self, nodes):
         for n in nodes:
             if n['type'] not in Graph.node_types:
-                raise RuntimeError('Unknown node type "{}"'.format(n['type']))
+                print('Unknown node type "{}"'.format(n['type']),file=sys.stderr)
+                continue
             new = Graph.node_types[n['type']](n)
             validate(new.config, new.config_schema)
             self.nodes[n['name']] = new
