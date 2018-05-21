@@ -42,20 +42,27 @@ def node(name: str):
     out = ip().get_output(name)
     if out is None:
         return '', 404
-    return app.response_class(response=out,
-                              status=200,
-                              mimetype='application/json')
+    return app.response_class(
+        response=out,
+        status=200,
+        mimetype='application/json; charset=utf-8'
+    )
 
 
 @app.route('/config', methods=['GET', 'POST'])
 def config():
     if request.method == 'GET':
         with open(CFG_PATH) as conf:
-            return conf.read()
+            return app.response_class(
+                response=conf.read(),
+                status=200,
+                mimetype='application/json; charset=utf-8'
+            )
     else:
         data = request.get_data()
+        print(data)
         try:
-            Graph(json.loads(data))  # validate config
+            Graph(json.loads(data), db())  # validate config
             with open(CFG_PATH, 'w') as conf:
                 conf.write(data)
         except Exception as ex:
