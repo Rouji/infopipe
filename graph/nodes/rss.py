@@ -1,12 +1,14 @@
-from graph import Node, Graph
-import feedparser
-import dateutil.parser
-from datetime import datetime
 import calendar
 from concurrent import futures
+from datetime import datetime
+
+import dateutil.parser
+import feedparser
+
+from ..graph import Node, Graph
 
 
-@Graph.register('rssreader')
+@Graph.register('rss')
 class RSSReader(Node):
     def __init__(self, config):
         super().__init__(config)
@@ -42,6 +44,7 @@ class RSSReader(Node):
             if 'entries' not in parsed:
                 return []
             return [self.entry_to_output(e) for e in parsed['entries']]
+
         with futures.ThreadPoolExecutor(max_workers=4) as executor:
             futs = [executor.submit(parse_feed, f) for f in self.config['feeds']]
             feeds = [fut.result() for fut in futures.as_completed(futs)]

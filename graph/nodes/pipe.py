@@ -1,4 +1,4 @@
-from graph import Node, Graph
+from ..graph import Node, Graph
 
 
 @Graph.register('passthrough')

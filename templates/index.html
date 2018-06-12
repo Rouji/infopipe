@@ -1,0 +1,28 @@
+<html>
+    <body>
+        info and help goes here
+<pre>
+curl -X POST -H "Content-Type: application/json" -d @- "{{ url_for('config', _external=True, user='UserNameGoesHere') }}?key=KeyGoesHere" << EOF
+{
+    "nodes": [
+        {
+            "name": "ytrss",
+            "type": "rss",
+            "feeds": [
+                "https://www.youtube.com/feeds/videos.xml?channel_id=UChWv6Pn_zP0rI6lgGt3MyfA",
+                "https://www.youtube.com/feeds/videos.xml?user=mikeselectricstuff",
+                "https://www.youtube.com/feeds/videos.xml?user=jimmydiresta"
+            ]
+        },
+        {
+            "name": "boltr",
+            "type": "regex",
+            "regex": "BOLTR",
+            "depend": ["ytrss"]
+        }
+    ]
+}
+EOF
+</pre>
+    </body>
+</html>

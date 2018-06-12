@@ -1,6 +1,6 @@
 # coding=utf-8
+from typing import List, Tuple, Union
 from importlib.util import spec_from_file_location, module_from_spec
-import json
 import os
 import sys
 from jsonschema import validate
@@ -28,6 +28,17 @@ class Node:
         raise NotImplementedError()
 
 
+class OutputStore(object):
+    def store_output(self, node: str, data: List[dict]) -> List[Tuple[str, str, dict]]:
+        raise NotImplementedError()
+
+    def get_output(self, node: str, count: Union[None, int] = None):
+        raise NotImplementedError()
+
+    def get_node_names(self):
+        raise NotImplementedError()
+
+
 class Graph(object):
     node_types = {}
     config_schema = {
@@ -40,8 +51,7 @@ class Graph(object):
 
     output_schema = {
         'type': 'object',
-        'properties':
-        {
+        'properties': {
             'source': {'type': 'string'},
             'id': {'type': 'string'},
             'title': {'type': 'string'},
@@ -54,25 +64,15 @@ class Graph(object):
         'required': ['source', 'id', 'title', 'timestamp']
     }
 
-    def __init__(self, config, sqlitedb):
+    def __init__(self, config: dict, output_store: OutputStore):
         self.config = config
-        validate(config, Graph.config_schema)
+        validate(config, self.config_schema)
 
-        self.db = sqlitedb
-
-        # create table
-        self.db.execute(
-            """CREATE TABLE IF NOT EXISTS node_output(
-                time TIMESTAMP DEFAULT current_timestamp,
-                node TEXT,
-                uid TEXT,
-                output TEXT,
-                UNIQUE(node, uid) ON CONFLICT REPLACE);""")
-        self.db.commit()
+        self.store = output_store
 
         self.nodes = {}
 
-        self.load_types('nodes')
+        self.load_types()
         self.instantiate_nodes(self.config['nodes'])
 
     @classmethod
@@ -83,7 +83,9 @@ class Graph(object):
 
         return reg
 
-    def load_types(self, path):
+    @staticmethod
+    def load_types():
+        path = os.path.join(os.path.dirname(__file__), 'nodes')
         for f in [f for f in os.listdir(path) if f.endswith('.py')]:
             name = f.rsplit('.py', 1)[0]
             spec = spec_from_file_location('graph.nodes.' + name,
@@ -94,7 +96,7 @@ class Graph(object):
     def instantiate_nodes(self, nodes):
         for n in nodes:
             if n['type'] not in Graph.node_types:
-                print('Unknown node type "{}"'.format(n['type']),file=sys.stderr)
+                print('Unknown node type "{}"'.format(n['type']), file=sys.stderr)
                 continue
             new = Graph.node_types[n['type']](n)
             validate(new.config, new.config_schema)
@@ -108,7 +110,6 @@ class Graph(object):
             if name in outputs.keys():
                 return outputs[name]
             if name not in self.nodes:
-                print(f'Unknown node "{name}"', file=sys.stderr)
                 return []
 
             depend_out = [
@@ -119,47 +120,9 @@ class Graph(object):
             out = self.nodes[name].process(
                 sum([dep for dep in depend_out if dep], [])
             )
-            if not out or len(out) < 1:
+            if not out:
                 return
-
-            res = self.db.execute(
-                """SELECT uid
-                FROM node_output
-                WHERE node = ?;""",
-                (node.config['name'],)
-            )
-            rows = res.fetchall()
-            ids = {}
-            if rows:
-                ids = {r[0] for r in rows}
-            new = [n for n in out if n['id'] not in ids]
-            outputs[name] = new
-            # print(f'node: {name}, new: {len(new)}')
-            for n in new:
-                validate(n, Graph.output_schema)
-            if len(new) > 0:
-                self.db.executemany(
-                    """INSERT INTO node_output(node, uid, output)
-                    VALUES(?, ?, ?);""",
-                    [(name, n['id'], json.dumps(n)) for n in new])
-                self.db.commit()
+            outputs[name] = self.store.store_output(name, out)
 
         for n in self.nodes.values():
             process_node(n)
-
-    def node_names(self):
-        return list(self.nodes.keys())
-
-    def get_output(self, node: str, limit: int = 100):
-        res = self.db.execute(
-            """SELECT output
-            FROM node_output
-            WHERE node = ?
-            ORDER BY time DESC
-            LIMIT ?;""",
-            (node, limit)
-        )
-        rows = res.fetchall()
-        if not rows:
-            return None
-        return '[' + ','.join([r[0] for r in rows]) + ']'

@@ -1,5 +1,6 @@
-from graph import Node, Graph
 import re
+
+from ..graph import Node, Graph
 
 
 @Graph.register('regex')
@@ -14,6 +15,6 @@ class RegexFilter(Node):
     def process(self, input_data):
         return [
             d for d in input_data
-            if self.re.match(d['title'])
-            or (d['content'] and self.re.match(d['content']))
+            if self.re.search(d['title'])
+               or (d['content'] and self.re.search(d['content']))
         ]
