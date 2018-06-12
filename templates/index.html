@@ -1,8 +1,48 @@
 <html>
-    <body>
-        info and help goes here
+<head>
+<title>Infopipe</title>
+<style>
+body {
+  font-family: Helvetica, arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  background-color: white;
+  color: #333;
+}
+h1, h2, h3, h4, h5, h6 {
+  margin: 20px 0 10px;
+  padding: 0;
+  font-weight: bold;
+  position: relative;
+}
+pre {
+  background-color: #f8f8f8;
+  border: 1px solid #cccccc;
+  font-size: 13px;
+  line-height: 19px;
+  overflow: auto;
+  padding: 6px 10px;
+  border-radius: 3px;
+}
+</style>
+
+<body>
+<h1>API (kinda)</h1>
+Some endpoints require you to specify your secret key that you get from registering. You can do so as either GET or POST parameter.
+
+<h2>Registering</h2>
 <pre>
-curl -X POST -H "Content-Type: application/json" -d @- "{{ url_for('config', _external=True, user='UserNameGoesHere') }}?key=KeyGoesHere" << EOF
+$ curl {{ url_for('register', _external=True, user='pete') }}
+{
+  "key": "ThSPyHfcvc",
+  "user": "pete"
+}
+</pre>
+You'll get a randomly generated secret key to use for doing your config etc. Make sure to not tell it to other people. No, you can't change it.
+
+<h2>Uploading Your Config</h2>
+<pre>
+curl -X POST -H "Content-Type: application/json" -d @- "{{ url_for('config', _external=True, user='pete') }}?key=ThSPyHfcvc" << EOF
 {
     "nodes": [
         {
@@ -23,6 +63,50 @@ curl -X POST -H "Content-Type: application/json" -d @- "{{ url_for('config', _ex
     ]
 }
 EOF
+
+{"success": true}
 </pre>
-    </body>
+
+<h2>Nodes</h2>
+A user's configured nodes can be listed with /&lt;user&gt;/nodes
+<pre>
+$ curl {{ url_for('nodes', _external=True, user='pete') }}
+[
+    "ytrss",
+    "boltr"
+]
+</pre>
+
+A node's output with /&lt;user&gt;/nodes/&lt;node&gt;
+<pre>
+$ curl {{ url_for('output', _external=True, user='pete', node='ytrss') }}
+[
+  {
+    "content": "", 
+    "id": "yt:video:-siuk4p4dO0", 
+    "link": "https://www.youtube.com/watch?v=-siuk4p4dO0", 
+    "source": "ytrss", 
+    "timestamp": 1516987343, 
+    "title": "Rohde &amp; Schwarz RTM3004 oscilloscope first look."
+  }, 
+  {
+    "content": "", 
+    "id": "yt:video:1jYJHy4uKp8", 
+    "link": "https://www.youtube.com/watch?v=1jYJHy4uKp8", 
+    "source": "ytrss", 
+    "timestamp": 1523586018, 
+    "title": "DiResta Jigsaw Puzzle for Lorde"
+  }, 
+  {
+    "content": "", 
+    "id": "yt:video:2WY3O26YYl8", 
+    "link": "https://www.youtube.com/watch?v=2WY3O26YYl8", 
+    "source": "ytrss", 
+    "timestamp": 1510943375, 
+    "title": "Hackaday Supercon 2017 Badge."
+  }, 
+  ...
+]
+</pre>
+</body>
 </html>
