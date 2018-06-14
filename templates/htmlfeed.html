@@ -1,0 +1,32 @@
+<html lang="en-US">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ user + '/' + node }}</title>
+<style>
+body {
+    font-family: Helvetica, arial, sans-serif;
+    font-size: 17px;
+    line-height: 1.6;
+    background-color: white;
+    color: #333;
+    padding: 0;
+    margin: 0;
+}
+a {text-decoration: none; color: #333;}
+a div {padding: 0.5rem;}
+a:nth-child(even) div{background-color: #eeeeee;}
+h2 {text-align: center; margin: 0;}
+</style>
+</head>
+<body>
+    <h2><a href="{{ url_for('nodes', user=user) }}?f=html">{{ user }}</a>/{{ node }}</h2>
+{% for entry in out %}
+    <a href="{{ entry['link'] }}">
+        <div>
+            {{ entry['title'] }}
+        </div>
+    </a>
+{% endfor %}
+</body>
+</html>

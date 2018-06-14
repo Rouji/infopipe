@@ -8,10 +8,13 @@ from functools import wraps
 from os.path import isfile
 
 from flask import Flask, jsonify, g, request, render_template
+from werkzeug.contrib.atom import AtomFeed
+from datetime import datetime
 
 from config import DB_PATH, KEY_LEN
 from graph.graph import Graph
 from sqlitestore import SqliteStore
+
 
 app = Flask(__name__)
 
@@ -34,9 +37,7 @@ def require_key(route):
         if key != _key:
             return jsonify({'error': "Incorrect key.".format(user)}), 403
         return route(*args, **kwargs)
-
     return wrap
-
 
 def db():
     if not getattr(g, '_db', None):
@@ -60,15 +61,35 @@ def root():
 
 
 @app.route('/<user>/nodes', methods=['GET'])
-@require_key
 def nodes(user: str):
-    return jsonify(g._store.get_node_names())
+    nodes = SqliteStore(db(), user).get_node_names()
+    f = request.values.get('f', None)
+    if f == 'html':
+        return render_template('htmlnodes.html', user=user, nodes=nodes)
+    return jsonify(nodes)
 
 
 @app.route('/<user>/nodes/<node>', methods=['GET'])
-@require_key
 def output(user: str, node: str):
-    return jsonify(g._store.get_output(node))
+    f = request.values.get('f', None)
+    output = SqliteStore(db(), user).get_output(node)
+    if f == 'rss':
+        feed_title = '{}/{}'.format(user,node)
+        feed = AtomFeed(feed_title,
+                        feed_url=request.url,
+                        url=request.url_root)
+        for entry in output[:20]:
+            feed.add(id=entry['id'],
+                     title=entry['title'],
+                     title_type='text',
+                     author=entry.get('author', feed_title),
+                     content_type='html',
+                     content=entry['content'],
+                     updated=datetime.fromtimestamp(int(entry['timestamp'])))
+        return feed.get_response()
+    elif f == 'html':
+        return render_template('htmlfeed.html', user=user, node=node, out=output)
+    return jsonify(output)
 
 
 @app.route('/<user>/config', methods=['GET', 'POST'])
@@ -83,7 +104,6 @@ def config(user: str):
             Graph(request.json, g._store)  # validate config
             g._store.save_config(request.json)
         except Exception as ex:
-            print(str(ex))
             return jsonify({"error": "Invalid config."}), 400
         return jsonify({"success": True})
 
@@ -100,4 +120,4 @@ def register(user: str):
 
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, host='0.0.0.0')

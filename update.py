@@ -15,7 +15,8 @@ def main(daemon=False):
     with sqlite3.connect(DB_PATH) as conn:
         def upd():
             for u, k, c in SqliteStore(conn).get_users():
-                Graph(c, SqliteStore(conn, u, k)).update()
+                if bool(c):
+                    Graph(c, SqliteStore(conn, u, k)).update()
 
         if daemon:
             from apscheduler.schedulers.blocking import BlockingScheduler

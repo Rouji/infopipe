@@ -1,5 +1,7 @@
-<html>
+<html lang="en-US">
 <head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Infopipe</title>
 <style>
 body {
@@ -32,7 +34,7 @@ Some endpoints require you to specify your secret key that you get from register
 
 <h2>Registering</h2>
 <pre>
-$ curl {{ url_for('register', _external=True, user='pete') }}
+$ curl http://example.com/register/pete
 {
   "key": "ThSPyHfcvc",
   "user": "pete"
@@ -42,7 +44,7 @@ You'll get a randomly generated secret key to use for doing your config etc. Mak
 
 <h2>Uploading Your Config</h2>
 <pre>
-curl -X POST -H "Content-Type: application/json" -d @- "{{ url_for('config', _external=True, user='pete') }}?key=ThSPyHfcvc" << EOF
+curl -X POST -H "Content-Type: application/json" -d @- "http://example.com/pete/config?key=ThSPyHfcvc" << EOF
 {
     "nodes": [
         {
@@ -70,7 +72,7 @@ EOF
 <h2>Nodes</h2>
 A user's configured nodes can be listed with /&lt;user&gt;/nodes
 <pre>
-$ curl {{ url_for('nodes', _external=True, user='pete') }}
+$ curl http://example.com/pete/nodes
 [
     "ytrss",
     "boltr"
@@ -79,7 +81,7 @@ $ curl {{ url_for('nodes', _external=True, user='pete') }}
 
 A node's output with /&lt;user&gt;/nodes/&lt;node&gt;
 <pre>
-$ curl {{ url_for('output', _external=True, user='pete', node='ytrss') }}
+$ curl http://example.com/pete/nodes/ytrss
 [
   {
     "content": "", 
@@ -87,7 +89,7 @@ $ curl {{ url_for('output', _external=True, user='pete', node='ytrss') }}
     "link": "https://www.youtube.com/watch?v=-siuk4p4dO0", 
     "source": "ytrss", 
     "timestamp": 1516987343, 
-    "title": "Rohde &amp; Schwarz RTM3004 oscilloscope first look."
+    "title": "Rohde & Schwarz RTM3004 oscilloscope first look."
   }, 
   {
     "content": "", 
@@ -107,6 +109,30 @@ $ curl {{ url_for('output', _external=True, user='pete', node='ytrss') }}
   }, 
   ...
 ]
+</pre>
+
+Or as an atom feed if you append &amp;f=rss
+<pre>
+$ curl http://localhost:5000/peter/nodes/ytrss?f=rss
+<xmp>
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title type="text">peter/ytrss</title>
+  <id>http://localhost:5000/peter/nodes/ytrss?f=rss</id>
+  <updated>2018-06-12T06:19:30Z</updated>
+  <link href="http://localhost:5000/" />
+  <link href="http://localhost:5000/peter/nodes/ytrss?f=rss" rel="self" />
+  <generator>Werkzeug</generator>
+  <entry xml:base="http://localhost:5000/peter/nodes/ytrss?f=rss">
+    <title type="text">Rohde &amp; Schwarz RTM3004 oscilloscope first look.</title>
+    <id>yt:video:-siuk4p4dO0</id>
+    <updated>2018-01-26T18:22:23Z</updated>
+    <author>
+      <name>peter/ytrss</name>
+    </author>
+   </entry>
+</xmp>
+   ...
 </pre>
 </body>
 </html>
