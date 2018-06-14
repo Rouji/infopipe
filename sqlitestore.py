@@ -34,8 +34,6 @@ class SqliteStore(OutputStore):
                                    (self.user, node))
         stored = {s[0] for s in stored} if stored else set()
         new_data = [d for d in data if d['id'] not in stored]
-        for n in new_data:
-            print(n['title'])
         if not new_data:
             return []
 
