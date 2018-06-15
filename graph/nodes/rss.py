@@ -26,7 +26,7 @@ class RSSReader(Node):
 
         try:
             date = dateutil.parser.parse(entry['published'])
-        except ValueError as ex:
+        except KeyError as ex:
             date = datetime.now()
 
         return {
